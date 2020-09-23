@@ -233,16 +233,21 @@ def blend_images(left_image, right_image):
     Returns:
         ndarray: 3D numpy array representing an RGB image after blending.
     '''
-    size=5
+    size=3
     levels=5
+
 
     lp_l = build_laplacian_pyramid(build_gaussian_pyramid(left_image,size,levels))
     lp_r = build_laplacian_pyramid(build_gaussian_pyramid(right_image,size,levels))
-    lp_concat = [concat(left,right) for (left, right) in zip(lp_l,lp_r)]
+    #lp_concat = [concat(left,right) for (left, right) in zip(lp_l,lp_r)]
 
-    result = lp_concat[levels-1]
+    label = concat(np.ones_like(left_image), np.zeros_like(left_image))
+    gp_label = build_gaussian_pyramid(label,size)
+    lp_combined = [label*left+(1-label)*right for (left, right, label) in zip(lp_l, lp_r, gp_label)]
+
+    result = lp_combined[levels-1]
     for i in range(levels-1,0,-1):
-        term1 = lp_concat[i-1]
+        term1 = lp_combined[i-1]
         term2 = upsample(result)
         x1,y1,_ = term1.shape
         x2,y2,_ = term2.shape
