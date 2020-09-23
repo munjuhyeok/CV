@@ -1,8 +1,6 @@
 from utils import *
 import numpy as np
 import time
-import process_images_bzs as bzs
-import process_images_tb as ltb
 
 def get_pixel_at(pixel_grid, i, j):
     '''
