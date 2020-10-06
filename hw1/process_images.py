@@ -242,10 +242,12 @@ def blend_images(left_image, right_image):
     #lp_concat = [concat(left,right) for (left, right) in zip(lp_l,lp_r)]
 
     label = concat(np.ones_like(left_image), np.zeros_like(left_image))
-    gp_label = build_gaussian_pyramid(label,size)
+    gp_label = build_gaussian_pyramid(255*label,size)
+    gp_label = [1/255*label for label in gp_label]
     lp_combined = [label*left+(1-label)*right for (left, right, label) in zip(lp_l, lp_r, gp_label)]
 
-    result = lp_combined[levels-1]
+
+    result = lp_combined[levels-1].astype(np.uint8)
     for i in range(levels-1,0,-1):
         term1 = lp_combined[i-1]
         term2 = upsample(result)
