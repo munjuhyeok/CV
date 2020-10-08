@@ -133,18 +133,18 @@ def nonMaximumSuppresion(Im, Io):
 
     return nms
 
-def doubleThresholding(edge, threshold1, threshold2):
+def doubleThresholding(Im, threshold1, threshold2):
 
-    result = np.zeros_like(edge,dtype = np.uint8)
-    result[edge<threshold1] = 0
-    result[np.logical_and(edge>=threshold1,edge<threshold2)] = 127
-    result[edge>=threshold2] = 255
+    result = np.zeros_like(Im,dtype = np.uint8)
+    result[Im<threshold1] = 0
+    result[np.logical_and(Im>=threshold1,Im<threshold2)] = 127
+    result[Im>=threshold2] = 255
     return result
 
-def edgeTracking(edge):
-    result = edge.copy()
+def edgeTracking(Im):
+    result = Im.copy()
     
-    while(True):
+    while(True): #iterate until no update
         isWeak = result ==127
         neighbor = []
         for i in range(-1,2):
@@ -188,6 +188,20 @@ def Canny(Igs, sigma, threshold1, threshold2):
 
 def HoughTransform(Im,threshold, rhoRes, thetaRes):
     # TODO ...
+    sizeY, sizeX = Im.shape
+    rhoMax = np.sqrt(np.square(sizeY)+np.square(sizeX))
+    rhoStep = rhoMax/rhoRes
+    thetaStep = 2*np.pi/thetaRes
+    H = np.zeros((rhoRes, thetaRes), dtype=float)
+
+    for y, x in zip(*np.where(Im>threshold)):
+        for i in range(thetaRes):
+            theta = i*thetaStep
+            rho = x*np.cos(theta)+y*np.sin(theta)
+            if(rho>0):
+                H[int(rho/rhoStep),i] += 1
+    print(H.dtype)
+
 
 
     return H
@@ -214,14 +228,19 @@ def main():
         Igs = np.array(img)
 
 
-        Image.fromarray(Canny(Igs, 1, 50, 100)).show()
+        # Image.fromarray(Canny(Igs, 1, 50, 100)).show()
 
         Igs = Igs / 255.
 
 
         # Hough function
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
+        Im = nonMaximumSuppresion(Im, Io) #added
+        Image.fromarray(doubleThresholding(Im, 0.1, 0.1)).show()
+        rhoRes = 100
+        thetaRes = 360
         H= HoughTransform(Im,threshold, rhoRes, thetaRes)
+        Image.fromarray(H).show()
         lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
         l = HoughLineSegments(lRho, lTheta, Im, threshold)
 
