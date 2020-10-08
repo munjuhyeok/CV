@@ -3,6 +3,7 @@ import math
 import glob
 import numpy as np
 from PIL import Image
+from cv2 import line
 
 # parameters
 
@@ -85,55 +86,68 @@ def EdgeDetection(Igs, sigma):
     sobelY = np.asarray([[1,2,1],[0,0,0],[-1,-2,-1]])
     Ix = ConvFilter(Igs,sobelX)
     Iy = ConvFilter(Igs,sobelY)
-    Im = np.sqrt(np.square(Ix)+np.square(Iy))
+    Im = np.sqrt(Ix**2+Iy**2)
     Io = np.arctan(Iy/Ix)
 
     return Im, Io, Ix, Iy
 
-def nonMaximumSuppresion(Im, Io):
+def nonMaximumSuppresion(Im, Io = None, neighborSize = (3,10)):
     '''
     non-maxmimum suppression
 
     Args:
         Im(ndarray): 2D numpy array representing an edge magnitude image.
         Io(ndarray): 2D numpy array representing an edge orientation image(rad).
+                    if None, consider all neighboring pixels in non-maximum suppression
+        neighborSize(int, int): half of suppression kernal size, only used when Io = None
 
     Returns:
         ndarray: 2D numpy array representing edge image after non-maximum suppresion
 
     '''
     sizeY, sizeX = Im.shape
-    nms = np.zeros_like(Im)
-    for i in range(sizeY):
-        for j in range(sizeX):
-            try:
-                angle = Io[i,j]
-                if (angle < -np.pi/4):
-                    temp = np.tan(angle + np.pi/2)
-                    p = (1-temp)*Im[i+1,j]+temp*Im[i+1,j+1]
-                    q = (1-temp)*Im[i-1,j]+temp*Im[i-1,j-1]
-                elif (angle < 0):
-                    temp = np.tan(-angle)
-                    p = (1-temp)*Im[i,j+1]+temp*Im[i+1,j+1]
-                    q = (1-temp)*Im[i,j-1]+temp*Im[i-1,j-1]
-                elif (angle < np.pi/4):
-                    temp = np.tan(angle)
-                    p = (1-temp)*Im[i,j+1]+temp*Im[i-1,j+1]
-                    q = (1-temp)*Im[i,j-1]+temp*Im[i+1,j-1]
-                elif (angle <= np.pi/2):
-                    temp = np.tan(np.pi/2-angle)
-                    p = (1-temp)*Im[i-1,j]+temp*Im[i-1,j+1]
-                    q = (1-temp)*Im[i+1,j]+temp*Im[i+1,j-1]
-                else:
+    result = Im.copy()
+    if (Io is None):
+        neighbor = []
+        for i in range(-neighborSize[0],neighborSize[0]+1):
+            for j in range(-neighborSize[1],neighborSize[1]+1):
+                if(i==0 and j==0): continue
+                neighbor.append(shift_pixel(shift_pixel(result,0,i),1,j))
+        neighbor = np.asarray(neighbor)
+        neighborMax = np.max(neighbor, axis=0)
+        result[Im < neighborMax] = 0
+
+    else:
+        for i in range(sizeY):
+            for j in range(sizeX):
+                try:
+                    angle = Io[i,j]
+                    if (angle < -np.pi/4):
+                        temp = np.tan(angle + np.pi/2)
+                        p = (1-temp)*Im[i+1,j]+temp*Im[i+1,j+1]
+                        q = (1-temp)*Im[i-1,j]+temp*Im[i-1,j-1]
+                    elif (angle < 0):
+                        temp = np.tan(-angle)
+                        p = (1-temp)*Im[i,j+1]+temp*Im[i+1,j+1]
+                        q = (1-temp)*Im[i,j-1]+temp*Im[i-1,j-1]
+                    elif (angle < np.pi/4):
+                        temp = np.tan(angle)
+                        p = (1-temp)*Im[i,j+1]+temp*Im[i-1,j+1]
+                        q = (1-temp)*Im[i,j-1]+temp*Im[i+1,j-1]
+                    elif (angle <= np.pi/2):
+                        temp = np.tan(np.pi/2-angle)
+                        p = (1-temp)*Im[i-1,j]+temp*Im[i-1,j+1]
+                        q = (1-temp)*Im[i+1,j]+temp*Im[i+1,j-1]
+                    else:
+                        pass
+                except IndexError:
                     pass
-            except IndexError:
-                pass
-            if(Im[i,j]>=q and Im[i,j]>=p):
-                nms[i,j] = Im[i,j]
+                if(Im[i,j]<q or Im[i,j]<p):
+                    result[i,j] = 0
 
-    return nms
+    return result
 
-def doubleThresholding(Im, threshold1, threshold2):
+def doubleThresholding(Im, threshold1, threshold2): # not used
 
     result = np.zeros_like(Im,dtype = np.uint8)
     result[Im<threshold1] = 0
@@ -141,7 +155,7 @@ def doubleThresholding(Im, threshold1, threshold2):
     result[Im>=threshold2] = 255
     return result
 
-def edgeTracking(Im):
+def edgeTracking(Im): # not used
     result = Im.copy()
     
     while(True): #iterate until no update
@@ -162,7 +176,7 @@ def edgeTracking(Im):
 
     return result
 
-def Canny(Igs, sigma, threshold1, threshold2):
+def Canny(Igs, sigma, threshold1, threshold2): # not used
     '''
     Canny Edge Operator
 
@@ -189,10 +203,10 @@ def Canny(Igs, sigma, threshold1, threshold2):
 def HoughTransform(Im,threshold, rhoRes, thetaRes):
     # TODO ...
     sizeY, sizeX = Im.shape
-    rhoMax = np.sqrt(np.square(sizeY)+np.square(sizeX))
+    rhoMax = np.sqrt(sizeY**2+sizeX**2)
     rhoStep = rhoMax/rhoRes
     thetaStep = 2*np.pi/thetaRes
-    H = np.zeros((rhoRes, thetaRes), dtype=float)
+    H = np.zeros((rhoRes, thetaRes), dtype=int)
 
     for y, x in zip(*np.where(Im>threshold)):
         for i in range(thetaRes):
@@ -200,14 +214,46 @@ def HoughTransform(Im,threshold, rhoRes, thetaRes):
             rho = x*np.cos(theta)+y*np.sin(theta)
             if(rho>0):
                 H[int(rho/rhoStep),i] += 1
-    print(H.dtype)
-
-
 
     return H
 
+def drawLines(Igs, lRho, lTheta, rhoRes, thetaRes):
+    print(rhoRes, thetaRes)
+    print(Igs.shape)
+    result = Igs.copy()
+    sizeY, sizeX, _ = Igs.shape
+    rhoMax = np.sqrt(sizeY**2+sizeX**2)
+
+    for rho, theta in zip(lRho, lTheta):
+        rho = rhoMax/rhoRes*rho
+        theta = 2*np.pi/thetaRes*theta
+        print(rho, theta)
+
+        for i in range(sizeY):
+            j = (int)((rho-i*np.sin(theta))/np.cos(theta))
+            if(j in range(sizeX)):
+                result[i,j] = [255, 0, 0] 
+        for j in range(sizeX):
+            i = (int)((rho-j*np.cos(theta))/np.sin(theta))
+            if(i in range(sizeY)):
+                result[i,j] = [255, 0, 0]
+
+
+    return result
+
 def HoughLines(H,rhoRes,thetaRes,nLines):
     # TODO ...
+    sizeX = H.shape[1]
+    lRho = np.zeros(nLines,dtype=int)
+    lTheta = np.zeros(nLines,dtype=int)
+    H = nonMaximumSuppresion(H)
+    for i in range(nLines):
+        temp = np.argmax(H)
+        rho = int(temp/sizeX)
+        theta = temp % sizeX
+        H[rho, theta] = -1
+        lRho[i] = rho
+        lTheta[i] = theta
 
 
     return lRho,lTheta
@@ -224,25 +270,46 @@ def main():
     for img_path in glob.glob(datadir+'/*.jpg'):
         # load grayscale image
         img = Image.open(img_path).convert("L")
+        img1 = Image.open(img_path).convert("RGB")
 
         Igs = np.array(img)
-
-
-        # Image.fromarray(Canny(Igs, 1, 50, 100)).show()
-
+        Igs1 = np.asarray(img1)
         Igs = Igs / 255.
 
 
+        # Image.fromarray(Igs).show()
         # Hough function
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
-        Image.fromarray(doubleThresholding(Im, 0.1, 0.1)).show()
-        rhoRes = 100
+        rhoRes = 200
         thetaRes = 360
-        H= HoughTransform(Im,threshold, rhoRes, thetaRes)
-        Image.fromarray(H).show()
-        lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
-        l = HoughLineSegments(lRho, lTheta, Im, threshold)
+
+        # H=np.load('datadir'[:-3]+'npy')
+        H = HoughTransform(Im, threshold, rhoRes, thetaRes)
+        np.save(img_path[:-3]+'npy', H)
+        H = nonMaximumSuppresion(H)
+
+
+        lRho, lTheta = HoughLines(H, rhoRes, thetaRes, 5)
+
+        Igs1 = drawLine(Igs1,lRho,lTheta, rhoRes, thetaRes)
+        Image.fromarray(Igs1).show()
+        # for rho, theta in zip(*HL):
+        #     rho = np.sqrt(Igs.shape[1]**2+Igs.shape[0]**2)/rhoRes*rho
+        #     theta = 2*np.pi/thetaRes*theta
+        #     print(rho, theta)
+        #     img1 = line(np.asarray(img1), ((int)(rho/np.sin(theta)), 0),(0,(int)(rho/np.cos(theta))),(255,0,0),1)
+            # Image.fromarray(img1).show()
+
+        # H= HoughTransform(Im,threshold, rhoRes, thetaRes)
+        # np.save('hough.npy',H)
+
+        # H = nonMaximumSuppresion(H)
+        # Image.fromarray(H).show()
+
+
+        # lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
+        # l = HoughLineSegments(lRho, lTheta, Im, threshold)
 
         # saves the outputs to files
         # Im, H, Im + hough line , Im + hough line segments
