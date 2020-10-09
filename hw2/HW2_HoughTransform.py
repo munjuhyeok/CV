@@ -161,8 +161,8 @@ def edgeTracking(Im): # not used
     while(True): #iterate until no update
         isWeak = result ==127
         neighbor = []
-        for i in range(-1,2):
-            for j in range(-1,2):
+        for i in [-1,0,1]:
+            for j in [-1,0,1]:
                 if(i==0 and j==0): continue
                 neighbor.append(shift_pixel(shift_pixel(result,0,i),1,j))
         neighbor = np.asarray(neighbor)
@@ -223,19 +223,16 @@ def drawLines(Igs, lRho, lTheta):
     sizeY, sizeX, _ = Igs.shape
 
     for rho, theta in zip(lRho, lTheta):
-        print(rho, theta)
-
         for i in range(sizeY):
             try:
-                j = (int)(round(((rho-i*np.sin(theta))/np.cos(theta))))
+                j = (int)(round(((rho-i*math.sin(theta))/math.cos(theta))))
                 if(j in range(sizeX)):
-                    # print(i,j)
                     result[i,j] = [255, 0, 0] 
             except OverflowError:
                 break
         for j in range(sizeX):
             try:
-                i = (int)(round(((rho-j*np.cos(theta))/np.sin(theta))))
+                i = (int)(round(((rho-j*math.cos(theta))/math.sin(theta))))
                 if(i in range(sizeY)):
                     result[i,j] = [255, 0, 0]
             except OverflowError:
@@ -257,13 +254,83 @@ def HoughLines(H,rhoRes,thetaRes,nLines): #return is radian
         lRho[i] = rho*rhoRes
         lTheta[i] = theta*thetaRes
 
-
     return lRho,lTheta
+
+def getCluster(points, point):
+
+    '''
+    extract cluster that pixel (i,j) belongs to from given points
+
+    Args:
+        points (list of 2D int tuples): point set, extracted points will be removed from the list
+        point (2D int tuple): point to get cluster
+
+    Returns:
+        list of 2D int tuples: cluster set
+
+    '''
+    i = point[0]
+    j = point[1]
+    cluster = []
+    newPoints = [(i,j)]
+    while(True):
+        try:
+            newPoint = newPoints.pop()
+            cluster.append(newPoint)
+            for i in [-1,0,1]:
+                for j in [-1,0,1]:
+                    if(i==0 and j==0): continue
+                    temp = (newPoint[0]+i, newPoint[1]+j)
+                    if(temp in points):
+                        newPoints.append(temp)
+                        points.remove(temp)
+        except IndexError:
+            break
+
+    return cluster
+
+
+
 
 def HoughLineSegments(lRho, lTheta, Im, threshold):
     # TODO ...
+    sizeY, sizeX = Im.shape
+    
+    l = []
+    for rho, theta in zip(lRho, lTheta):
+        label = np.zeros_like(Im, dtype=bool)
+        for i in range(sizeY):
+            try:
+                j = (int)(round(((rho-i*np.sin(theta))/np.cos(theta))))
+                if(j in range(sizeX)):
+                    label[i-2:i+3,j-2:j+3] = True
+            except OverflowError:
+                break
+        for j in range(sizeX):
+            try:
+                i = (int)(round(((rho-j*np.cos(theta))/np.sin(theta))))
+                if(i in range(sizeY)):
+                    label[i-2:i+3,j-2:j+3] = True
+            except OverflowError:
+                break
+        points = list(zip(*np.where(np.logical_and(label, Im>threshold))))
+        #label contains the lines for given lRho, lTheta and their adjacent pixels
 
+        largestCluster = []
+        while(True):
+            try:
+                point = points.pop()
+                cluster = getCluster(points,point)
+                if (len(cluster)>len(largestCluster)):
+                    largestCluster = cluster
+            except IndexError:
+                break
+        l.append(largestCluster)
+        
+    # Image.fromarray(255*np.logical_and(label, Im>threshold).astype(np.uint8)).show()
 
+    
+    # return np.logical_and(label, Im>threshold)
     return l
 
 def main():
@@ -282,8 +349,6 @@ def main():
         Igs = ConvFilter(Igs,G)
 
 
-        # Image.fromarray(Igs).show()
-        # Hough function
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
 
@@ -295,12 +360,12 @@ def main():
         # H = nonMaximumSuppresion(H)
         # Image.fromarray(H.astype(float)).show()
 
-        lRho, lTheta = HoughLines(H, rhoRes, thetaRes, 5)
-        print(lRho, lTheta)
+        lRho, lTheta = HoughLines(H, rhoRes, thetaRes, nLines)
+        # print(lRho, lTheta)
         Igs1 = drawLines(Igs1,lRho,lTheta)
         # Igs1 = drawLines(np.stack([Im, Im, Im], axis = -1).as, lRho, lTheta, rhoRes, thetaRes)
         # print('Igs1', Igs1.dtype)
-        Image.fromarray(Igs1).show()
+        # Image.fromarray(Igs1).show()
 
         # H= HoughTransform(Im,threshold, rhoRes, thetaRes)
         # np.save('hough.npy',H)
@@ -309,9 +374,15 @@ def main():
         # Image.fromarray(H).show()
 
 
-        # lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
-        # l = HoughLineSegments(lRho, lTheta, Im, threshold)
-        break
+        lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
+        l = HoughLineSegments(lRho, lTheta, Im, threshold)
+        print('l0',l[0])
+        for line in l:
+            for point in line:
+                Igs1[point] = [0,255,0]
+        Image.fromarray(Igs1).show()
+        # Image.fromarray(255*l.astype(np.uint8)).show()
+
         # saves the outputs to files
         # Im, H, Im + hough line , Im + hough line segments
 
