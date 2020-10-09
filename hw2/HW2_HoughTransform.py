@@ -2,7 +2,7 @@
 import math
 import glob
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from cv2 import line
 
 # parameters
@@ -210,11 +210,14 @@ def HoughTransform(Im,threshold, rhoRes, thetaRes):
     H = np.zeros((sizeRho, sizeTheta), dtype=int)
 
     for y, x in zip(*np.where(Im>threshold)):
-        thetaAxis = np.arange(sizeTheta)
-        thetas = thetaRes*thetaAxis
-        rhos = x*np.cos(thetas)+y*np.sin(thetas)
-        indices = np.where(rhos>0)
-        H[np.rint(rhos[indices]/rhoRes).astype(int),indices] += 1
+        try:
+            thetaAxis = np.arange(sizeTheta)
+            thetas = thetaRes*thetaAxis
+            rhos = x*np.cos(thetas)+y*np.sin(thetas)
+            indices = np.where(rhos>0)
+            H[np.rint(rhos[indices]/rhoRes).astype(int),indices] += 1
+        except IndexError:
+            continue
 
     return H
 
@@ -230,12 +233,16 @@ def drawLines(Igs, lRho, lTheta):
                     result[i,j] = [255, 0, 0] 
             except OverflowError:
                 break
+            except ValueError:
+                break
         for j in range(sizeX):
             try:
                 i = (int)(round(((rho-j*math.cos(theta))/math.sin(theta))))
                 if(i in range(sizeY)):
                     result[i,j] = [255, 0, 0]
             except OverflowError:
+                break
+            except ValueError:
                 break
 
     return result
@@ -290,8 +297,6 @@ def getCluster(points, point):
     return cluster
 
 
-
-
 def HoughLineSegments(lRho, lTheta, Im, threshold):
     # TODO ...
     sizeY, sizeX = Im.shape
@@ -306,12 +311,16 @@ def HoughLineSegments(lRho, lTheta, Im, threshold):
                     label[i-2:i+3,j-2:j+3] = True
             except OverflowError:
                 break
+            except ValueError:
+                break
         for j in range(sizeX):
             try:
                 i = (int)(round(((rho-j*np.cos(theta))/np.sin(theta))))
                 if(i in range(sizeY)):
                     label[i-2:i+3,j-2:j+3] = True
             except OverflowError:
+                break
+            except ValueError:
                 break
         points = list(zip(*np.where(np.logical_and(label, Im>threshold))))
         #label contains the lines for given lRho, lTheta and their adjacent pixels
@@ -325,7 +334,23 @@ def HoughLineSegments(lRho, lTheta, Im, threshold):
                     largestCluster = cluster
             except IndexError:
                 break
-        l.append(largestCluster)
+        
+        if(not largestCluster): continue
+        temp = np.asarray(largestCluster)
+        if(theta%np.pi/2<np.pi/4):
+            yS = np.min(temp,axis=0)[0]
+            yE = np.max(temp,axis=0)[0]
+            xS = (int)(round(((rho-yS*math.sin(theta))/math.cos(theta))))
+            xE = (int)(round(((rho-yE*math.sin(theta))/math.cos(theta))))
+        else:
+            xS = np.min(temp,axis=0)[1]
+            xE = np.max(temp,axis=0)[1]
+            yS = (int)(round(((rho-xS*math.cos(theta))/math.sin(theta))))
+            yE = (int)(round(((rho-xE*math.cos(theta))/math.sin(theta))))
+
+        xy = {'start':(xS,yS), 'end':(xE,yE)}
+        l.append(xy)
+        # l.append(largestCluster)
         
     # Image.fromarray(255*np.logical_and(label, Im>threshold).astype(np.uint8)).show()
 
@@ -345,8 +370,6 @@ def main():
         Igs1 = np.asarray(img1)
         Igs = Igs / 255.
         
-        G = getGaussianKernel(sigma)
-        Igs = ConvFilter(Igs,G)
 
 
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
@@ -376,11 +399,16 @@ def main():
 
         lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
         l = HoughLineSegments(lRho, lTheta, Im, threshold)
-        print('l0',l[0])
+        draw = ImageDraw.Draw(img1)
+
         for line in l:
-            for point in line:
-                Igs1[point] = [0,255,0]
-        Image.fromarray(Igs1).show()
+            draw.line([line['start'],line['end']],fill=(0,255,0))
+        img1.show()
+        # print('l0',l[0])
+        # for line in l:
+        #     for point in line:
+        #         Igs1[point] = [0,255,0]
+        # Image.fromarray(Igs1).show()
         # Image.fromarray(255*l.astype(np.uint8)).show()
 
         # saves the outputs to files
