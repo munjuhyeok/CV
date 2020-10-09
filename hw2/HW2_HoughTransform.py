@@ -209,17 +209,17 @@ def HoughTransform(Im,threshold, rhoRes, thetaRes):
     H = np.zeros((rhoRes, thetaRes), dtype=int)
 
     for y, x in zip(*np.where(Im>threshold)):
-        for i in range(thetaRes):
-            theta = i*thetaStep
-            rho = x*np.cos(theta)+y*np.sin(theta)
-            if(rho>0):
-                H[int(rho/rhoStep),i] += 1
+        thetaAxis = np.arange(thetaRes)
+        thetas = thetaStep*thetaAxis
+        rhos = x*np.cos(thetas)+y*np.sin(thetas)
+        indices = np.where(rhos>0)
+        H[np.rint(rhos[indices]/rhoStep).astype(int),indices] += 1
 
     return H
 
 def drawLines(Igs, lRho, lTheta, rhoRes, thetaRes):
-    print(rhoRes, thetaRes)
-    print(Igs.shape)
+    # print(rhoRes, thetaRes)
+    # print(Igs.shape)
     result = Igs.copy()
     sizeY, sizeX, _ = Igs.shape
     rhoMax = np.sqrt(sizeY**2+sizeX**2)
@@ -230,14 +230,20 @@ def drawLines(Igs, lRho, lTheta, rhoRes, thetaRes):
         print(rho, theta)
 
         for i in range(sizeY):
-            j = (int)((rho-i*np.sin(theta))/np.cos(theta))
-            if(j in range(sizeX)):
-                result[i,j] = [255, 0, 0] 
+            try:
+                j = (int)(round(((rho-i*np.sin(theta))/np.cos(theta))))
+                if(j in range(sizeX)):
+                    # print(i,j)
+                    result[i,j] = [255, 0, 0] 
+            except OverflowError:
+                break
         for j in range(sizeX):
-            i = (int)((rho-j*np.cos(theta))/np.sin(theta))
-            if(i in range(sizeY)):
-                result[i,j] = [255, 0, 0]
-
+            try:
+                i = (int)(round(((rho-j*np.cos(theta))/np.sin(theta))))
+                if(i in range(sizeY)):
+                    result[i,j] = [255, 0, 0]
+            except OverflowError:
+                break
 
     return result
 
@@ -275,31 +281,33 @@ def main():
         Igs = np.array(img)
         Igs1 = np.asarray(img1)
         Igs = Igs / 255.
+        
+        G = getGaussianKernel(1)
+        Igs = ConvFilter(Igs,G)
 
 
         # Image.fromarray(Igs).show()
         # Hough function
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
+
+        threshold = 0.3
         rhoRes = 200
         thetaRes = 360
 
-        # H=np.load('datadir'[:-3]+'npy')
-        H = HoughTransform(Im, threshold, rhoRes, thetaRes)
-        np.save(img_path[:-3]+'npy', H)
-        H = nonMaximumSuppresion(H)
 
+        H = HoughTransform(Im, threshold, rhoRes, thetaRes)
+        # Image.fromarray(H.astype(float)).show()
+
+        H = nonMaximumSuppresion(H)
+        # Image.fromarray(H.astype(float)).show()
 
         lRho, lTheta = HoughLines(H, rhoRes, thetaRes, 5)
 
-        Igs1 = drawLine(Igs1,lRho,lTheta, rhoRes, thetaRes)
+        Igs1 = drawLines(Igs1,lRho,lTheta, rhoRes, thetaRes)
+        # Igs1 = drawLines(np.stack([Im, Im, Im], axis = -1).as, lRho, lTheta, rhoRes, thetaRes)
+        # print('Igs1', Igs1.dtype)
         Image.fromarray(Igs1).show()
-        # for rho, theta in zip(*HL):
-        #     rho = np.sqrt(Igs.shape[1]**2+Igs.shape[0]**2)/rhoRes*rho
-        #     theta = 2*np.pi/thetaRes*theta
-        #     print(rho, theta)
-        #     img1 = line(np.asarray(img1), ((int)(rho/np.sin(theta)), 0),(0,(int)(rho/np.cos(theta))),(255,0,0),1)
-            # Image.fromarray(img1).show()
 
         # H= HoughTransform(Im,threshold, rhoRes, thetaRes)
         # np.save('hough.npy',H)
