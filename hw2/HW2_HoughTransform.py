@@ -209,7 +209,7 @@ def HoughTransform(Im,threshold, rhoRes, thetaRes):
     
     H = np.zeros((sizeRho, sizeTheta), dtype=int)
 
-    for y, x in zip(*np.where(Im>threshold)):
+    for y, x in zip(*np.where(Im>=threshold)):
         try:
             thetaAxis = np.arange(sizeTheta)
             thetas = thetaRes*thetaAxis
@@ -226,24 +226,17 @@ def drawLines(Igs, lRho, lTheta):
     sizeY, sizeX, _ = Igs.shape
 
     for rho, theta in zip(lRho, lTheta):
-        for i in range(sizeY):
-            try:
-                j = (int)(round(((rho-i*math.sin(theta))/math.cos(theta))))
-                if(j in range(sizeX)):
-                    result[i,j] = [255, 0, 0] 
-            except OverflowError:
-                break
-            except ValueError:
-                break
-        for j in range(sizeX):
-            try:
-                i = (int)(round(((rho-j*math.cos(theta))/math.sin(theta))))
-                if(i in range(sizeY)):
-                    result[i,j] = [255, 0, 0]
-            except OverflowError:
-                break
-            except ValueError:
-                break
+        remainder = theta%np.pi
+        if(remainder<np.pi/4 or remainder>3*np.pi/4):
+            yAxis = np.arange(sizeY)
+            xAxis = np.rint((rho-yAxis*math.sin(theta))/math.cos(theta)).astype(int)
+            indices = np.where((xAxis>=0) & (xAxis<sizeX))
+            result[yAxis[indices],xAxis[indices]]=[255,0,0]
+        else:
+            xAxis = np.arange(sizeX)
+            yAxis = np.rint((rho-xAxis*math.cos(theta))/math.sin(theta)).astype(int)
+            indices = np.where((yAxis>=0) & (yAxis<sizeY))
+            result[yAxis[indices],xAxis[indices]]=[255,0,0]
 
     return result
 
@@ -304,25 +297,22 @@ def HoughLineSegments(lRho, lTheta, Im, threshold):
     l = []
     for rho, theta in zip(lRho, lTheta):
         label = np.zeros_like(Im, dtype=bool)
-        for i in range(sizeY):
-            try:
-                j = (int)(round(((rho-i*np.sin(theta))/np.cos(theta))))
-                if(j in range(sizeX)):
-                    label[i-2:i+3,j-2:j+3] = True
-            except OverflowError:
-                break
-            except ValueError:
-                break
-        for j in range(sizeX):
-            try:
-                i = (int)(round(((rho-j*np.cos(theta))/np.sin(theta))))
-                if(i in range(sizeY)):
-                    label[i-2:i+3,j-2:j+3] = True
-            except OverflowError:
-                break
-            except ValueError:
-                break
-        points = list(zip(*np.where(np.logical_and(label, Im>threshold))))
+        remainder = theta%np.pi
+        if(remainder<np.pi/4 or remainder>3*np.pi/4):
+
+            yAxis = np.arange(sizeY)
+            xAxis = np.rint((rho-yAxis*math.sin(theta))/math.cos(theta)).astype(int)
+            for i in range(-2,3):
+                indices = np.where((xAxis+i>=0) & (xAxis+i<sizeX))
+                label[yAxis[indices],xAxis[indices]+i] = True
+        else:
+
+            xAxis = np.arange(sizeX)
+            yAxis = np.rint((rho-xAxis*math.cos(theta))/math.sin(theta)).astype(int)
+            for i in range(-2,3):
+                indices = np.where((yAxis+i>=0) & (yAxis+i<sizeY))
+                label[yAxis[indices]+i,xAxis[indices]] = True
+        points = list(zip(*np.where(np.logical_and(label, Im>=threshold))))
         #label contains the lines for given lRho, lTheta and their adjacent pixels
 
         largestCluster = []
@@ -337,7 +327,8 @@ def HoughLineSegments(lRho, lTheta, Im, threshold):
         
         if(not largestCluster): continue
         temp = np.asarray(largestCluster)
-        if(theta%np.pi/2<np.pi/4):
+        remainder = theta%np.pi
+        if(remainder<np.pi/4 or remainder>3*np.pi/4):
             yS = np.min(temp,axis=0)[0]
             yE = np.max(temp,axis=0)[0]
             xS = (int)(round(((rho-yS*math.sin(theta))/math.cos(theta))))
@@ -374,8 +365,10 @@ def main():
 
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
-
-
+        temp = Im
+        temp[Im<threshold] = 0
+        temp[Im>=threshold] = 255
+        Image.fromarray(temp).show()
 
         H = HoughTransform(Im, threshold, rhoRes, thetaRes)
         # Image.fromarray(H.astype(float)).show()
@@ -404,13 +397,6 @@ def main():
         for line in l:
             draw.line([line['start'],line['end']],fill=(0,255,0))
         img1.show()
-        # print('l0',l[0])
-        # for line in l:
-        #     for point in line:
-        #         Igs1[point] = [0,255,0]
-        # Image.fromarray(Igs1).show()
-        # Image.fromarray(255*l.astype(np.uint8)).show()
-
         # saves the outputs to files
         # Im, H, Im + hough line , Im + hough line segments
 
