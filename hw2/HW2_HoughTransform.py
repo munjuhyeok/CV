@@ -123,19 +123,19 @@ def nonMaximumSuppresion(Im, Io = None, neighborSize = (3,10)):
                 try:
                     angle = Io[i,j]
                     if (angle < -np.pi/4):
-                        temp = np.tan(angle + np.pi/2)
+                        temp = math.tan(angle + np.pi/2)
                         p = (1-temp)*Im[i+1,j]+temp*Im[i+1,j+1]
                         q = (1-temp)*Im[i-1,j]+temp*Im[i-1,j-1]
                     elif (angle < 0):
-                        temp = np.tan(-angle)
+                        temp = math.tan(-angle)
                         p = (1-temp)*Im[i,j+1]+temp*Im[i+1,j+1]
                         q = (1-temp)*Im[i,j-1]+temp*Im[i-1,j-1]
                     elif (angle < np.pi/4):
-                        temp = np.tan(angle)
+                        temp = math.tan(angle)
                         p = (1-temp)*Im[i,j+1]+temp*Im[i-1,j+1]
                         q = (1-temp)*Im[i,j-1]+temp*Im[i+1,j-1]
                     elif (angle <= np.pi/2):
-                        temp = np.tan(np.pi/2-angle)
+                        temp = math.tan(np.pi/2-angle)
                         p = (1-temp)*Im[i-1,j]+temp*Im[i-1,j+1]
                         q = (1-temp)*Im[i+1,j]+temp*Im[i+1,j-1]
                     else:
@@ -203,30 +203,26 @@ def Canny(Igs, sigma, threshold1, threshold2): # not used
 def HoughTransform(Im,threshold, rhoRes, thetaRes):
     # TODO ...
     sizeY, sizeX = Im.shape
-    rhoMax = np.sqrt(sizeY**2+sizeX**2)
-    rhoStep = rhoMax/rhoRes
-    thetaStep = 2*np.pi/thetaRes
-    H = np.zeros((rhoRes, thetaRes), dtype=int)
+    rhoMax = math.sqrt(sizeY**2+sizeX**2)
+    sizeRho = (int)(rhoMax/rhoRes)
+    sizeTheta = (int)(2*np.pi/thetaRes)
+    
+    H = np.zeros((sizeRho, sizeTheta), dtype=int)
 
     for y, x in zip(*np.where(Im>threshold)):
-        thetaAxis = np.arange(thetaRes)
-        thetas = thetaStep*thetaAxis
+        thetaAxis = np.arange(sizeTheta)
+        thetas = thetaRes*thetaAxis
         rhos = x*np.cos(thetas)+y*np.sin(thetas)
         indices = np.where(rhos>0)
-        H[np.rint(rhos[indices]/rhoStep).astype(int),indices] += 1
+        H[np.rint(rhos[indices]/rhoRes).astype(int),indices] += 1
 
     return H
 
-def drawLines(Igs, lRho, lTheta, rhoRes, thetaRes):
-    # print(rhoRes, thetaRes)
-    # print(Igs.shape)
+def drawLines(Igs, lRho, lTheta):
     result = Igs.copy()
     sizeY, sizeX, _ = Igs.shape
-    rhoMax = np.sqrt(sizeY**2+sizeX**2)
 
     for rho, theta in zip(lRho, lTheta):
-        rho = rhoMax/rhoRes*rho
-        theta = 2*np.pi/thetaRes*theta
         print(rho, theta)
 
         for i in range(sizeY):
@@ -247,19 +243,19 @@ def drawLines(Igs, lRho, lTheta, rhoRes, thetaRes):
 
     return result
 
-def HoughLines(H,rhoRes,thetaRes,nLines):
+def HoughLines(H,rhoRes,thetaRes,nLines): #return is radian
     # TODO ...
     sizeX = H.shape[1]
-    lRho = np.zeros(nLines,dtype=int)
-    lTheta = np.zeros(nLines,dtype=int)
+    lRho = np.zeros(nLines,dtype=float)
+    lTheta = np.zeros(nLines,dtype=float)
     H = nonMaximumSuppresion(H)
     for i in range(nLines):
         temp = np.argmax(H)
         rho = int(temp/sizeX)
         theta = temp % sizeX
         H[rho, theta] = -1
-        lRho[i] = rho
-        lTheta[i] = theta
+        lRho[i] = rho*rhoRes
+        lTheta[i] = theta*thetaRes
 
 
     return lRho,lTheta
@@ -282,7 +278,7 @@ def main():
         Igs1 = np.asarray(img1)
         Igs = Igs / 255.
         
-        G = getGaussianKernel(1)
+        G = getGaussianKernel(sigma)
         Igs = ConvFilter(Igs,G)
 
 
@@ -291,20 +287,17 @@ def main():
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
 
-        threshold = 0.3
-        rhoRes = 200
-        thetaRes = 360
 
 
         H = HoughTransform(Im, threshold, rhoRes, thetaRes)
         # Image.fromarray(H.astype(float)).show()
 
-        H = nonMaximumSuppresion(H)
+        # H = nonMaximumSuppresion(H)
         # Image.fromarray(H.astype(float)).show()
 
         lRho, lTheta = HoughLines(H, rhoRes, thetaRes, 5)
-
-        Igs1 = drawLines(Igs1,lRho,lTheta, rhoRes, thetaRes)
+        print(lRho, lTheta)
+        Igs1 = drawLines(Igs1,lRho,lTheta)
         # Igs1 = drawLines(np.stack([Im, Im, Im], axis = -1).as, lRho, lTheta, rhoRes, thetaRes)
         # print('Igs1', Igs1.dtype)
         Image.fromarray(Igs1).show()
@@ -318,7 +311,7 @@ def main():
 
         # lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
         # l = HoughLineSegments(lRho, lTheta, Im, threshold)
-
+        break
         # saves the outputs to files
         # Im, H, Im + hough line , Im + hough line segments
 
