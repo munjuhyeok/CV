@@ -91,7 +91,7 @@ def EdgeDetection(Igs, sigma):
 
     return Im, Io, Ix, Iy
 
-def nonMaximumSuppresion(Im, Io = None, neighborSize = (3,10)):
+def nonMaximumSuppresion(Im, Io = None, neighborSize = (2,2)):
     '''
     non-maxmimum suppression
 
@@ -354,6 +354,7 @@ def main():
     # read images
     for img_path in glob.glob(datadir+'/*.jpg'):
         # load grayscale image
+
         img = Image.open(img_path).convert("L")
         img1 = Image.open(img_path).convert("RGB")
 
@@ -362,43 +363,44 @@ def main():
         Igs = Igs / 255.
         
 
-
         Im, Io, Ix, Iy = EdgeDetection(Igs, sigma)
         Im = nonMaximumSuppresion(Im, Io) #added
-        temp = Im
-        temp[Im<threshold] = 0
-        temp[Im>=threshold] = 255
-        Image.fromarray(temp).show()
+
+
+        temp = 255*Im.copy()
+        temp[Im>=255] = 255
+        temp = Image.fromarray(temp.astype(np.uint8))
+        # temp.show()
+        temp.save(resultdir+'/'+img_path[-9:-4]+"im.png")
 
         H = HoughTransform(Im, threshold, rhoRes, thetaRes)
-        # Image.fromarray(H.astype(float)).show()
 
-        # H = nonMaximumSuppresion(H)
-        # Image.fromarray(H.astype(float)).show()
+        temp = H.copy()
+        temp[H>=255] = 255
+        temp = Image.fromarray(temp.astype(np.uint8))
+        # temp.show()
+        temp.save(resultdir+'/'+img_path[-9:-4]+"h.png")
 
         lRho, lTheta = HoughLines(H, rhoRes, thetaRes, nLines)
-        # print(lRho, lTheta)
+        
         Igs1 = drawLines(Igs1,lRho,lTheta)
-        # Igs1 = drawLines(np.stack([Im, Im, Im], axis = -1).as, lRho, lTheta, rhoRes, thetaRes)
-        # print('Igs1', Igs1.dtype)
-        # Image.fromarray(Igs1).show()
-
-        # H= HoughTransform(Im,threshold, rhoRes, thetaRes)
-        # np.save('hough.npy',H)
-
-        # H = nonMaximumSuppresion(H)
-        # Image.fromarray(H).show()
-
+        temp = Image.fromarray(Igs1)
+        # temp.show()
+        temp.save(resultdir+'/'+img_path[-9:-4]+"hl.png")
 
         lRho,lTheta =HoughLines(H,rhoRes,thetaRes,nLines)
         l = HoughLineSegments(lRho, lTheta, Im, threshold)
-        draw = ImageDraw.Draw(img1)
 
+        draw = ImageDraw.Draw(img1)
         for line in l:
             draw.line([line['start'],line['end']],fill=(0,255,0))
-        img1.show()
+        # img1.show()
+        img1.save(resultdir+'/'+img_path[-9:-4]+"hls.png")
+
         # saves the outputs to files
         # Im, H, Im + hough line , Im + hough line segments
+
+
 
 
 if __name__ == '__main__':
