@@ -11,7 +11,7 @@ datadir = './data'
 resultdir='./results'
 
 sigma=2
-threshold=0.03
+threshold=0.1
 rhoRes=2
 thetaRes=math.pi/180
 nLines=20
