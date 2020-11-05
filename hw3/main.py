@@ -20,7 +20,9 @@ def compute_h(p1, p2):
     # TODO ...
     A = compute_A(p1, p2)
 
-    u, s, vh = np.linalg.svd(A.T.dot(A), compute_uv=True)
+    # u, s, vh = np.linalg.svd(A.T.dot(A), compute_uv=True)
+    u, s, vh = np.linalg.svd(A, compute_uv=True)
+
     H = vh[-1].reshape(3,3)
 
     return H
@@ -68,13 +70,11 @@ def warp_points(points, H, return_float = False):
     if (return_float == True) : return (warped_homogeneous/scales)[:2].T
     else: return np.rint(warped_homogeneous/scales)[:2].astype(int).T
 
-def warp_image(igs_in, igs_ref, H):
-    # TODO ...
+def get_igs_warp(igs_in, igs_ref, H):
     height_in, width_in, _ = igs_in.shape
     height_ref, width_ref, _ = igs_ref.shape
     H_inv = np.linalg.inv(H)
 
-    #calculate igs_warp
     igs_warp = np.zeros_like(igs_ref,dtype=np.uint8)
     y_indices = np.repeat(np.arange(height_ref), width_ref)
     x_indices = np.tile(np.arange(width_ref), height_ref)
@@ -89,7 +89,13 @@ def warp_image(igs_in, igs_ref, H):
             if(0<=y_before_warp<height_in and 0<=x_before_warp<width_in):
                 igs_warp[y,x] = igs_in[y_before_warp,x_before_warp]
 
-    # calculate igs_merge
+    return igs_warp
+
+def get_igs_merge(igs_in, igs_ref, H):
+    height_in, width_in, _ = igs_in.shape
+    height_ref, width_ref, _ = igs_ref.shape
+    H_inv = np.linalg.inv(H)
+
     corners = warp_points(np.asarray([[0,0],[width_in-1,0],[0,height_in-1],[width_in-1,height_in-1]]),H)
     warp_end_width, warp_end_height = corners.max(axis = 0)
     warp_start_width, warp_start_height = corners.min(axis = 0)
@@ -107,6 +113,8 @@ def warp_image(igs_in, igs_ref, H):
 
     indices_before_warp = warp_points(indices, H_inv)
     
+    igs_merge[pad_up:height_ref+pad_up,pad_left:width_ref+pad_left] = igs_ref
+
     for y in range(warp_end_height - warp_start_height):
         for x in range(warp_end_width - warp_start_width):
             index_before_warp = indices_before_warp[y*(warp_end_width-warp_start_width)+x]
@@ -115,34 +123,24 @@ def warp_image(igs_in, igs_ref, H):
             if(0<=y_before_warp<height_in and 0<=x_before_warp<width_in):
                 igs_merge[y+max(0,warp_start_height),x+max(0,warp_start_width)] = igs_in[y_before_warp,x_before_warp]
 
-    igs_merge[pad_up:height_ref+pad_up,pad_left:width_ref+pad_left] = igs_ref
+    return igs_merge
+
+
+def warp_image(igs_in, igs_ref, H):
+    # TODO ...
+    igs_warp = get_igs_warp(igs_in, igs_ref, H)
+
+    igs_merge = get_igs_merge(igs_in, igs_ref, H)
 
     return igs_warp, igs_merge
 
 def rectify(igs, p1, p2):
     # TODO ...
-    height_in, width_in, _ = igs.shape
-
     H = compute_h_norm(p2, p1)
 
-    H_inv = np.linalg.inv(H)
+    igs_ref = np.zeros((400,250,3),dtype=np.uint8)
 
-    igs_rec = np.zeros((400,250,3),dtype=np.uint8)
-    # height_rec, width_rec, _ = igs_rec.shape
-    # i_indices = np.repeat(np.arange(height_rec), width_rec)
-    # j_indices = np.tile(np.arange(width_rec), height_rec)
-    # indices = np.concatenate((i_indices.reshape(-1,1), j_indices.reshape(-1,1)),axis=1)
-
-    # indices_before_warp = warp_points(indices, H_inv)
-    # for i in range(height_rec):
-    #     for j in range(width_rec):
-    #         index_before_warp = indices_before_warp[i*width_rec+j]
-    #         i_before_warp = index_before_warp[0]
-    #         j_before_warp = index_before_warp[1]
-    #         if(0<=i_before_warp<height_in and 0<=j_before_warp<width_in):
-    #             igs_rec[i,j] = igs[i_before_warp,j_before_warp]
-
-    return warp_image(igs, igs_rec, H)[0]
+    return get_igs_warp(igs, igs_ref, H)
 
 
 def set_cor_mosaic():
